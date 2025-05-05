@@ -41,35 +41,48 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
-// Apply migrations before starting the app
-using (var scope = app.Services.CreateScope())
+// Apply migrations at startup
+if (app.Environment.IsProduction())
 {
-    var services = scope.ServiceProvider;
-    var logger = services.GetRequiredService<ILogger<Program>>();
-    
-    try
+    using (var scope = app.Services.CreateScope())
     {
-        logger.LogInformation("Starting database migration...");
-        var context = services.GetRequiredService<ApplicationDbContext>();
+        var services = scope.ServiceProvider;
+        var logger = services.GetRequiredService<ILogger<Program>>();
         
-        // Apply any pending migrations
-        await context.Database.MigrateAsync();
-        logger.LogInformation("Database migration completed successfully!");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "An error occurred while migrating the database.");
-        
-        // Try to create tables directly if migration fails
         try
         {
+            logger.LogInformation("Checking database connection...");
             var context = services.GetRequiredService<ApplicationDbContext>();
-            await context.Database.EnsureCreatedAsync();
-            logger.LogInformation("Created database schema using EnsureCreated.");
+            
+            // First, try migrations
+            try
+            {
+                logger.LogInformation("Applying migrations...");
+                context.Database.Migrate();
+                logger.LogInformation("Migrations applied successfully!");
+            }
+            catch (Exception migrationEx)
+            {
+                logger.LogWarning($"Migration failed: {migrationEx.Message}");
+                
+                // If migrations fail, try to create the database directly
+                try
+                {
+                    logger.LogInformation("Attempting to create database schema directly...");
+                    context.Database.EnsureCreated();
+                    logger.LogInformation("Database schema created successfully!");
+                }
+                catch (Exception createEx)
+                {
+                    logger.LogError($"Failed to create database: {createEx.Message}");
+                    // Continue anyway - the app might still work for some operations
+                }
+            }
         }
-        catch (Exception ensureEx)
+        catch (Exception ex)
         {
-            logger.LogError(ensureEx, "Failed to create database schema.");
+            logger.LogError($"Database initialization failed: {ex.Message}");
+            // Continue anyway
         }
     }
 }
@@ -86,6 +99,26 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
 app.MapRazorPages();
+
+// Test endpoint
+app.MapGet("/test", () => "Application is running!");
+
+// Database status endpoint
+app.MapGet("/db-status", async (ApplicationDbContext db) =>
+{
+    try
+    {
+        var canConnect = await db.Database.CanConnectAsync();
+        return Results.Json(new { 
+            CanConnect = canConnect,
+            Provider = db.Database.ProviderName
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { Error = ex.Message });
+    }
+});
 
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "3000";
