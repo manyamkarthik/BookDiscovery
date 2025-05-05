@@ -1,0 +1,66 @@
+html {
+    position: relative;
+    min-height: 100%;
+}
+
+body {
+    margin-bottom: 60px; /* Margin bottom by footer height */
+}
+
+.footer {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    white-space: nowrap;
+    line-height: 60px; /* Vertically center the text there */
+}
+
+/* Custom styles for better mobile experience */
+.book-card {
+    transition: transform 0.2s;
+}
+
+    .book-card:hover {
+        transform: translateY(-5px);
+    }
+
+/* Ensure images are responsive */
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Better spacing on mobile */
+@media (max-width: 576px) {
+    .display-4 {
+        font-size: 2rem;
+    }
+
+    .lead {
+        font-size: 1.1rem;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+/* Make search form stack on mobile */
+@media (max-width: 575px) {
+    .search-form {
+        flex-direction: column;
+    }
+
+        .search-form input,
+        .search-form button {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+}
+
+/* Improve card layout on tablets */
+@media (min-width: 768px) and (max-width: 991px) {
+    .card-img-top {
+        height: 250px !important;
+    }
+}

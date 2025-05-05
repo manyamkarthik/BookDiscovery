@@ -1,0 +1,122 @@
+﻿@page
+@model BookDiscovery.Pages.DashboardModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="container py-4">
+    <h1 class="mb-4">Library Dashboard</h1>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Books</h5>
+                    <h2 class="card-text">@Model.TotalBooksInDatabase</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Unique Authors</h5>
+                    <h2 class="card-text">@Model.TotalUniqueAuthors</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Searches</h5>
+                    <h2 class="card-text">@Model.TotalSearches</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">Analytics</h5>
+                    <p class="card-text">View insights below</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Popular Searches</h5>
+                    @if (Model.PopularSearches != null && Model.PopularSearches.Any())
+                    {
+                        <div class="table-responsive">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Search Query</th>
+                                        <th>Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var search in Model.PopularSearches)
+                                    {
+                                        <tr>
+                                            <td>@search.Query</td>
+                                            <td>@search.Count</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <p>No search data available yet.</p>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            @if (Model.BooksByYearData != null && Model.BooksByYearData.Any())
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Books by Publication Year</h5>
+                        <canvas id="booksChart"></canvas>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    @if (Model.BooksByYearData != null && Model.BooksByYearData.Any())
+    {
+        <script>
+            var ctx = document.getElementById('booksChart').getContext('2d');
+            var chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [@Html.Raw(string.Join(",", Model.BooksByYearData.Select(x => $"'{x.Year}'")))],
+                    datasets: [{
+                        label: 'Number of Books',
+                        data: [@string.Join(",", Model.BooksByYearData.Select(x => x.Count))],
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        </script>
+    }
+}

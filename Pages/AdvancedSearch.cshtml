@@ -1,0 +1,36 @@
+﻿@page
+@model BookDiscovery.Pages.AdvancedSearchModel
+@{
+    ViewData["Title"] = "Advanced Search";
+}
+
+<div class="container py-4">
+    <h1>Advanced Search</h1>
+
+    <form method="get" class="mb-4">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Title</label>
+                <input type="text" name="Title" value="@Model.Title" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Author</label>
+                <input type="text" name="Author" value="@Model.Author" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Subject</label>
+                <input type="text" name="Subject" value="@Model.Subject" class="form-control" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">ISBN</label>
+                <input type="text" name="ISBN" value="@Model.ISBN" class="form-control" />
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Search</button>
+                <a href="/AdvancedSearch" class="btn btn-secondary">Clear</a>
+            </div>
+        </div>
+    </form>
+
+    <!-- Search results display similar to Index page -->
+</div>

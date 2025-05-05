@@ -1,0 +1,67 @@
+﻿@page "{workId}"
+@model BookDiscovery.Pages.Books.DetailsModel
+@{
+    ViewData["Title"] = Model.Book?.Title ?? "Book Details";
+}
+
+<div class="container py-4">
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            @if (!string.IsNullOrEmpty(Model.CoverUrl))
+            {
+                <img src="@Model.CoverUrl" class="img-fluid rounded shadow" alt="@Model.Book.Title cover" style="width: 100%; max-width: 400px;">
+            }
+            else
+            {
+                <div class="bg-light rounded shadow p-5 text-center" style="min-height: 400px; display: flex; align-items: center; justify-content: center;">
+                    <span class="text-muted">No cover available</span>
+                </div>
+            }
+        </div>
+        <div class="col-md-8">
+            <h1 class="mb-3">@Model.Book?.Title</h1>
+
+            @if (Model.Authors.Any())
+            {
+                <p class="lead">
+                    by @string.Join(", ", Model.Authors)
+                </p>
+            }
+            else if (!string.IsNullOrEmpty(Model.Book?.Author))
+            {
+                <p class="lead">
+                    by @Model.Book.Author
+                </p>
+            }
+
+            @if (!string.IsNullOrEmpty(Model.Book?.Description))
+            {
+                <div class="my-4">
+                    <h3>Description</h3>
+                    <p>@Model.Book.Description</p>
+                </div>
+            }
+
+            @if (Model.BookDetails?.Subjects != null && Model.BookDetails.Subjects.Any())
+            {
+                <div class="my-4">
+                    <h3>Subjects</h3>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var subject in Model.BookDetails.Subjects.Take(15))
+                        {
+                            <span class="badge bg-secondary">@subject</span>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="my-4">
+                <h3>Add to Reading List</h3>
+                <div class="alert alert-info">
+                    Reading list functionality coming soon!
+                </div>
+                <a href="/" class="btn btn-secondary">Back to Search</a>
+            </div>
+        </div>
+    </div>
+</div>

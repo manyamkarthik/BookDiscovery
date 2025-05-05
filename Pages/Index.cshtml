@@ -1,0 +1,144 @@
+﻿@page
+@model BookDiscovery.Pages.IndexModel
+@{
+    ViewData["Title"] = "Book Discovery";
+}
+
+<div class="container">
+    <div class="text-center mb-5">
+        <h1 class="display-4">Book Discovery</h1>
+        <p class="lead">Search millions of books and create your perfect reading lists</p>
+    </div>
+
+    <div class="row justify-content-center mb-5">
+        <div class="col-md-8 col-lg-6">
+            <form method="get" class="d-flex flex-column flex-sm-row gap-2" id="searchForm">
+                <input type="text"
+                       name="SearchQuery"
+                       value="@Model.SearchQuery"
+                       class="form-control form-control-lg"
+                       placeholder="Search by title, author, or ISBN..." />
+                <button type="submit" class="btn btn-primary btn-lg" id="searchButton">
+                    <span id="searchText">Search</span>
+                    <span id="searchSpinner" class="spinner-border spinner-border-sm d-none" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    @if (Model.PopularSearches != null && Model.PopularSearches.Any())
+    {
+        <div class="row mb-4">
+            <div class="col-12 text-center">
+                <h5>Popular Searches</h5>
+                <div class="d-flex flex-wrap gap-2 justify-content-center">
+                    @foreach (var search in Model.PopularSearches)
+                    {
+                        <a href="?SearchQuery=@search.Query" class="btn btn-outline-secondary btn-sm">
+                            @search.Query <span class="badge bg-secondary">@search.Count</span>
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.RecentBooks != null && Model.RecentBooks.Any())
+    {
+        <div class="row mb-5">
+            <div class="col-12">
+                <h3>Recently Viewed Books</h3>
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-md-4 g-4">
+                    @foreach (var book in Model.RecentBooks)
+                    {
+                        <div class="col">
+                            <div class="card h-100">
+                                @if (!string.IsNullOrEmpty(book.CoverUrl))
+                                {
+                                    <img src="@book.CoverUrl" class="card-img-top" alt="@book.Title"
+                                         style="height: 200px; object-fit: contain;">
+                                }
+                                else
+                                {
+                                    <div class="card-img-top bg-light d-flex align-items-center justify-content-center"
+                                         style="height: 200px;">
+                                        <span class="text-muted">No cover</span>
+                                    </div>
+                                }
+                                <div class="card-body">
+                                    <h6 class="card-title text-truncate" title="@book.Title">@book.Title</h6>
+                                    <a href="/Books/Details/@book.OpenLibraryId"
+                                       class="btn btn-sm btn-outline-primary">View</a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (Model.SearchResults != null)
+    {
+        <div class="row">
+            <div class="col-12">
+                <h3>Search Results (@Model.SearchResults.NumFound found)</h3>
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+                    @foreach (var book in Model.SearchResults.Docs)
+                    {
+                        <div class="col">
+                            <div class="card h-100 book-card">
+                                @if (book.Cover_I.HasValue)
+                                {
+                                    <img src="https://covers.openlibrary.org/b/id/@(book.Cover_I)-M.jpg"
+                                         class="card-img-top"
+                                         alt="@book.Title cover"
+                                         style="height: 300px; object-fit: contain;">
+                                }
+                                else
+                                {
+                                    <div class="card-img-top bg-light d-flex align-items-center justify-content-center"
+                                         style="height: 300px;">
+                                        <span class="text-muted">No cover available</span>
+                                    </div>
+                                }
+                                <div class="card-body">
+                                    <h5 class="card-title text-truncate" title="@book.Title">@book.Title</h5>
+                                    @if (book.Author_Name != null && book.Author_Name.Any())
+                                    {
+                                        <p class="card-text">
+                                            <small class="text-muted">by @string.Join(", ", book.Author_Name)</small>
+                                        </p>
+                                    }
+                                    @if (book.First_Publish_Year.HasValue)
+                                    {
+                                        <p class="card-text">
+                                            <small class="text-muted">First published: @book.First_Publish_Year</small>
+                                        </p>
+                                    }
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <a asp-page="/Books/Details"
+                                       asp-route-workId="@book.Key.Replace("/works/", "")"
+                                       class="btn btn-primary w-100">View Details</a>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById('searchForm').addEventListener('submit', function() {
+            document.getElementById('searchText').classList.add('d-none');
+            document.getElementById('searchSpinner').classList.remove('d-none');
+            document.getElementById('searchButton').disabled = true;
+        });
+    </script>
+}
