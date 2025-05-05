@@ -41,49 +41,122 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
-// Apply migrations at startup
-if (app.Environment.IsProduction())
+// Apply migrations at startup - with fallback to direct table creation
+using (var scope = app.Services.CreateScope())
 {
-    using (var scope = app.Services.CreateScope())
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    var context = services.GetRequiredService<ApplicationDbContext>();
+    
+    try
     {
-        var services = scope.ServiceProvider;
-        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogInformation("Database Migration Process Starting...");
         
-        try
+        // First, check if we can connect
+        if (await context.Database.CanConnectAsync())
         {
-            logger.LogInformation("Checking database connection...");
-            var context = services.GetRequiredService<ApplicationDbContext>();
+            logger.LogInformation("Database connection successful!");
             
-            // First, try migrations
+            // Check if tables exist
+            var tablesExist = false;
             try
             {
-                logger.LogInformation("Applying migrations...");
-                context.Database.Migrate();
-                logger.LogInformation("Migrations applied successfully!");
+                var count = await context.Database.ExecuteSqlRawAsync("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'");
+                tablesExist = count > 0;
             }
-            catch (Exception migrationEx)
+            catch
             {
-                logger.LogWarning($"Migration failed: {migrationEx.Message}");
+                tablesExist = false;
+            }
+            
+            if (!tablesExist)
+            {
+                logger.LogInformation("No tables found. Creating database schema...");
                 
-                // If migrations fail, try to create the database directly
+                // Try migrations first
                 try
                 {
-                    logger.LogInformation("Attempting to create database schema directly...");
-                    context.Database.EnsureCreated();
-                    logger.LogInformation("Database schema created successfully!");
+                    await context.Database.MigrateAsync();
+                    logger.LogInformation("Migrations applied successfully!");
                 }
-                catch (Exception createEx)
+                catch (Exception migEx)
                 {
-                    logger.LogError($"Failed to create database: {createEx.Message}");
-                    // Continue anyway - the app might still work for some operations
+                    logger.LogWarning($"Migration failed: {migEx.Message}. Attempting direct creation...");
+                    
+                    // If migrations fail, create tables directly
+                    try
+                    {
+                        var sql = @"
+                            CREATE TABLE IF NOT EXISTS ""Books"" (
+                                ""Id"" SERIAL PRIMARY KEY,
+                                ""OpenLibraryId"" TEXT NOT NULL,
+                                ""Title"" TEXT NOT NULL,
+                                ""Author"" TEXT,
+                                ""Description"" TEXT,
+                                ""CoverUrl"" TEXT,
+                                ""PublishYear"" INTEGER,
+                                ""PageCount"" INTEGER,
+                                ""ISBN"" TEXT,
+                                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL
+                            );
+
+                            CREATE TABLE IF NOT EXISTS ""ReadingLists"" (
+                                ""Id"" SERIAL PRIMARY KEY,
+                                ""Name"" TEXT NOT NULL,
+                                ""Description"" TEXT,
+                                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL
+                            );
+
+                            CREATE TABLE IF NOT EXISTS ""SearchHistories"" (
+                                ""Id"" SERIAL PRIMARY KEY,
+                                ""SearchQuery"" TEXT NOT NULL,
+                                ""SearchedAt"" TIMESTAMP WITH TIME ZONE NOT NULL,
+                                ""ResultCount"" INTEGER NOT NULL
+                            );
+
+                            CREATE TABLE IF NOT EXISTS ""ReadingListBooks"" (
+                                ""ReadingListId"" INTEGER NOT NULL,
+                                ""BookId"" INTEGER NOT NULL,
+                                ""AddedAt"" TIMESTAMP WITH TIME ZONE NOT NULL,
+                                PRIMARY KEY (""ReadingListId"", ""BookId""),
+                                FOREIGN KEY (""ReadingListId"") REFERENCES ""ReadingLists"" (""Id"") ON DELETE CASCADE,
+                                FOREIGN KEY (""BookId"") REFERENCES ""Books"" (""Id"") ON DELETE CASCADE
+                            );
+
+                            CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
+                                ""MigrationId"" TEXT NOT NULL PRIMARY KEY,
+                                ""ProductVersion"" TEXT NOT NULL
+                            );
+                        ";
+                        
+                        await context.Database.ExecuteSqlRawAsync(sql);
+                        logger.LogInformation("Tables created successfully!");
+                        
+                        // Add a migration history entry
+                        await context.Database.ExecuteSqlRawAsync(
+                            @"INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"") 
+                              VALUES ('20240504000001_InitialCreate', '8.0.0') 
+                              ON CONFLICT DO NOTHING");
+                    }
+                    catch (Exception createEx)
+                    {
+                        logger.LogError($"Failed to create tables: {createEx.Message}");
+                    }
                 }
             }
+            else
+            {
+                logger.LogInformation("Tables already exist.");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            logger.LogError($"Database initialization failed: {ex.Message}");
-            // Continue anyway
+            logger.LogError("Cannot connect to database!");
         }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError($"Database initialization failed: {ex.Message}");
     }
 }
 
@@ -100,8 +173,57 @@ app.UseRouting();
 app.UseAuthorization();
 app.MapRazorPages();
 
-// Test endpoint
-app.MapGet("/test", () => "Application is running!");
+// Manual migration endpoint
+app.MapGet("/create-tables", async (ApplicationDbContext db) =>
+{
+    try
+    {
+        var sql = @"
+            CREATE TABLE IF NOT EXISTS ""Books"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""OpenLibraryId"" TEXT NOT NULL,
+                ""Title"" TEXT NOT NULL,
+                ""Author"" TEXT,
+                ""Description"" TEXT,
+                ""CoverUrl"" TEXT,
+                ""PublishYear"" INTEGER,
+                ""PageCount"" INTEGER,
+                ""ISBN"" TEXT,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ""ReadingLists"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""Name"" TEXT NOT NULL,
+                ""Description"" TEXT,
+                ""CreatedAt"" TIMESTAMP WITH TIME ZONE NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ""SearchHistories"" (
+                ""Id"" SERIAL PRIMARY KEY,
+                ""SearchQuery"" TEXT NOT NULL,
+                ""SearchedAt"" TIMESTAMP WITH TIME ZONE NOT NULL,
+                ""ResultCount"" INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ""ReadingListBooks"" (
+                ""ReadingListId"" INTEGER NOT NULL,
+                ""BookId"" INTEGER NOT NULL,
+                ""AddedAt"" TIMESTAMP WITH TIME ZONE NOT NULL,
+                PRIMARY KEY (""ReadingListId"", ""BookId""),
+                FOREIGN KEY (""ReadingListId"") REFERENCES ""ReadingLists"" (""Id"") ON DELETE CASCADE,
+                FOREIGN KEY (""BookId"") REFERENCES ""Books"" (""Id"") ON DELETE CASCADE
+            );
+        ";
+        
+        await db.Database.ExecuteSqlRawAsync(sql);
+        return Results.Ok("Tables created successfully!");
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(ex.Message);
+    }
+});
 
 // Database status endpoint
 app.MapGet("/db-status", async (ApplicationDbContext db) =>
@@ -109,14 +231,18 @@ app.MapGet("/db-status", async (ApplicationDbContext db) =>
     try
     {
         var canConnect = await db.Database.CanConnectAsync();
-        return Results.Json(new { 
+        var tables = await db.Database.SqlQuery<string>($"SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'").ToListAsync();
+        
+        return Results.Json(new
+        {
             CanConnect = canConnect,
-            Provider = db.Database.ProviderName
+            Tables = tables,
+            TablesCount = tables.Count
         });
     }
     catch (Exception ex)
     {
-        return Results.Json(new { Error = ex.Message });
+        return Results.Problem(ex.Message);
     }
 });
 
