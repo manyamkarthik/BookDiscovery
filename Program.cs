@@ -11,16 +11,17 @@ builder.Services.AddRazorPages();
 if (builder.Environment.IsProduction())
 {
     // Use PostgreSQL in production (Railway)
-    var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL");
-    if (!string.IsNullOrEmpty(connectionString))
+    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    
+    if (!string.IsNullOrEmpty(databaseUrl))
     {
         // Convert Railway's DATABASE_URL to .NET connection string format
-        var databaseUri = new Uri(connectionString);
+        var databaseUri = new Uri(databaseUrl);
         var userInfo = databaseUri.UserInfo.Split(':');
-        var connectionStringBuilder = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseUri.LocalPath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true;";
-
+        var connectionString = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseUri.LocalPath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true;";
+        
         builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionStringBuilder));
+            options.UseNpgsql(connectionString));
     }
 }
 else
@@ -33,9 +34,6 @@ else
 // Add HttpClient for OpenLibrary API
 builder.Services.AddHttpClient<OpenLibraryService>();
 builder.Services.AddHttpClient();
-
-// Add logging
-builder.Services.AddLogging();
 
 var app = builder.Build();
 
@@ -58,11 +56,12 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-
 app.UseRouting();
-
 app.UseAuthorization();
-
 app.MapRazorPages();
+
+// Configure port for Railway
+var port = Environment.GetEnvironmentVariable("PORT") ?? "3000";
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
