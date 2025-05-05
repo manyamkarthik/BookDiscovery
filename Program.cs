@@ -41,23 +41,35 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
-// Apply migrations automatically in production
-if (app.Environment.IsProduction())
+// Apply migrations before starting the app
+using (var scope = app.Services.CreateScope())
 {
-    using (var scope = app.Services.CreateScope())
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+    
+    try
     {
-        var services = scope.ServiceProvider;
+        logger.LogInformation("Starting database migration...");
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        
+        // Apply any pending migrations
+        await context.Database.MigrateAsync();
+        logger.LogInformation("Database migration completed successfully!");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "An error occurred while migrating the database.");
+        
+        // Try to create tables directly if migration fails
         try
         {
             var context = services.GetRequiredService<ApplicationDbContext>();
-            Console.WriteLine("Applying database migrations...");
-            context.Database.Migrate();
-            Console.WriteLine("Database migrations applied successfully!");
+            await context.Database.EnsureCreatedAsync();
+            logger.LogInformation("Created database schema using EnsureCreated.");
         }
-        catch (Exception ex)
+        catch (Exception ensureEx)
         {
-            Console.WriteLine($"An error occurred while migrating the database: {ex.Message}");
-            // Let the app continue even if migration fails
+            logger.LogError(ensureEx, "Failed to create database schema.");
         }
     }
 }
@@ -74,21 +86,6 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
 app.MapRazorPages();
-
-// Test endpoints
-app.MapGet("/test", () => "Application is running!");
-app.MapGet("/test-db", async (ApplicationDbContext db) =>
-{
-    try
-    {
-        var canConnect = await db.Database.CanConnectAsync();
-        return Results.Ok($"Database connection: {canConnect}");
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem(ex.Message);
-    }
-});
 
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "3000";
