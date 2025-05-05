@@ -30,8 +30,8 @@ if (builder.Environment.IsProduction())
                 Database = databaseUri.AbsolutePath.TrimStart('/'),
                 Username = userInfo[0],
                 Password = userInfo[1],
-                SslMode = SslMode.Require,
-                TrustServerCertificate = true
+                SslMode = SslMode.Require
+                // Remove TrustServerCertificate as it's obsolete
             }.ToString();
             
             Console.WriteLine($"Connecting to database: {databaseUri.Host}/{databaseUri.AbsolutePath.TrimStart('/')}");
@@ -118,7 +118,7 @@ app.UseRouting();
 app.UseAuthorization();
 app.MapRazorPages();
 
-// Add test endpoint
+// Fix the test endpoint - proper way to inject services
 app.MapGet("/test-db", async (ApplicationDbContext db) =>
 {
     try
@@ -126,17 +126,43 @@ app.MapGet("/test-db", async (ApplicationDbContext db) =>
         var canConnect = await db.Database.CanConnectAsync();
         var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
         
-        return new
+        return Results.Json(new
         {
             CanConnect = canConnect,
             PendingMigrations = pendingMigrations.ToList(),
             DatabaseProvider = db.Database.ProviderName
-        };
+        });
     }
     catch (Exception ex)
     {
-        return new { Error = ex.Message };
+        return Results.Json(new { Error = ex.Message });
     }
+});
+
+// Manual migration endpoint
+app.MapGet("/migrate", async (ApplicationDbContext db) =>
+{
+    try
+    {
+        await db.Database.MigrateAsync();
+        return Results.Ok("Migrations applied successfully!");
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Migration error: {ex.Message}");
+    }
+});
+
+// Environment check endpoint
+app.MapGet("/env", () =>
+{
+    return Results.Json(new
+    {
+        DatabaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL") != null ? "Present" : "Missing",
+        Port = Environment.GetEnvironmentVariable("PORT"),
+        Environment = app.Environment.EnvironmentName,
+        AspNetCoreEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+    });
 });
 
 // Configure port for Railway
