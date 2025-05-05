@@ -1,6 +1,7 @@
 using BookDiscovery.Data;
 using BookDiscovery.Services;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,18 +11,47 @@ builder.Services.AddRazorPages();
 // Configure Entity Framework based on environment
 if (builder.Environment.IsProduction())
 {
-    // Use PostgreSQL in production (Railway)
     var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    Console.WriteLine($"DATABASE_URL present: {!string.IsNullOrEmpty(databaseUrl)}");
     
     if (!string.IsNullOrEmpty(databaseUrl))
     {
-        // Convert Railway's DATABASE_URL to .NET connection string format
-        var databaseUri = new Uri(databaseUrl);
-        var userInfo = databaseUri.UserInfo.Split(':');
-        var connectionString = $"Host={databaseUri.Host};Port={databaseUri.Port};Database={databaseUri.LocalPath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true;";
-        
-        builder.Services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        try
+        {
+            // Parse the DATABASE_URL
+            var databaseUri = new Uri(databaseUrl);
+            var userInfo = databaseUri.UserInfo.Split(':');
+            
+            // Build connection string for Npgsql
+            var connectionString = new NpgsqlConnectionStringBuilder
+            {
+                Host = databaseUri.Host,
+                Port = databaseUri.Port,
+                Database = databaseUri.AbsolutePath.TrimStart('/'),
+                Username = userInfo[0],
+                Password = userInfo[1],
+                SslMode = SslMode.Require,
+                TrustServerCertificate = true
+            }.ToString();
+            
+            Console.WriteLine($"Connecting to database: {databaseUri.Host}/{databaseUri.AbsolutePath.TrimStart('/')}");
+            
+            // Test the connection
+            using (var conn = new NpgsqlConnection(connectionString))
+            {
+                conn.Open();
+                Console.WriteLine("Successfully connected to database!");
+                conn.Close();
+            }
+            
+            builder.Services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseNpgsql(connectionString));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Database connection error: {ex.Message}");
+            throw;
+        }
     }
 }
 else
@@ -35,15 +65,43 @@ else
 builder.Services.AddHttpClient<OpenLibraryService>();
 builder.Services.AddHttpClient();
 
+builder.Logging.AddConsole();
+
 var app = builder.Build();
 
 // Apply migrations automatically in production
 if (app.Environment.IsProduction())
 {
-    using (var scope = app.Services.CreateScope())
+    try
     {
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.Database.Migrate();
+        using (var scope = app.Services.CreateScope())
+        {
+            var services = scope.ServiceProvider;
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            
+            logger.LogInformation("Starting database migration...");
+            
+            var context = services.GetRequiredService<ApplicationDbContext>();
+            
+            // Log pending migrations
+            var pendingMigrations = context.Database.GetPendingMigrations();
+            logger.LogInformation($"Pending migrations: {pendingMigrations.Count()}");
+            
+            foreach (var migration in pendingMigrations)
+            {
+                logger.LogInformation($"Pending migration: {migration}");
+            }
+            
+            // Apply migrations
+            context.Database.Migrate();
+            logger.LogInformation("Database migration completed successfully!");
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while migrating the database.");
+        throw;
     }
 }
 
@@ -59,6 +117,27 @@ app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthorization();
 app.MapRazorPages();
+
+// Add test endpoint
+app.MapGet("/test-db", async (ApplicationDbContext db) =>
+{
+    try
+    {
+        var canConnect = await db.Database.CanConnectAsync();
+        var pendingMigrations = await db.Database.GetPendingMigrationsAsync();
+        
+        return new
+        {
+            CanConnect = canConnect,
+            PendingMigrations = pendingMigrations.ToList(),
+            DatabaseProvider = db.Database.ProviderName
+        };
+    }
+    catch (Exception ex)
+    {
+        return new { Error = ex.Message };
+    }
+});
 
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "3000";
